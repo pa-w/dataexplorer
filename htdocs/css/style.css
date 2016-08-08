@@ -1,0 +1,107 @@
+body {
+	width: 99vw;
+	height: 99vh;
+	margin: 0;
+	padding: 0;
+	color: gray;
+	font-family: Courier New,Courier,Lucida Sans Typewriter,Lucida Typewriter,monospace;
+	font-size: 1em;
+}
+h1,h2,h3,h4,h5,h6 { 
+	margin: 0;
+}
+h2 { font-size: 0.8em; text-align: center; margin-bottom: 1%; }
+h3 { font-size: 0.7em; }
+table {
+	font-size: 0.5em; 
+}
+
+div.col {
+	float: left;
+	width: 20%;
+}
+.col.two {
+	width: 50%;
+}
+div.row {
+	clear: both;
+}
+.header {
+	border-bottom: 2px solid gray;
+}
+.th {
+	background-color: #a3a3a3;
+	color: white;
+
+}
+tr:nth-child(even) {
+	background-color: rgba(233,233,233,0.5);
+	border-bottom: 1px solid rgba(255,255,255,0.5);
+}
+.axis path {
+	display: none;
+}
+.axis text {
+	fill: black;
+	font-size: 0.5em;
+}
+.axis line {
+	stroke: #777;
+	stroke-dasharray: 1,1;
+}
+#chart, #treemap {
+	height: 40%;
+}
+#chart path, #chart rect {
+	fill: rgba(0,0,0,0); !important;
+}
+#chart .up, #chart .down, #chart .eq { 
+	stroke: none !important;
+}
+#chart path {
+	stroke-width: 2px;
+}
+path.count { stroke: #a6cee3 !important; }
+path.count_1 { stroke: #1f78b4; }
+path.count_2 { stroke: #b2df8a;}
+path.count_3 { stroke: #33a02c; }
+path.count_4 { stroke: #fb9a99; }
+path.count_5 { stroke: #e31a1c; }
+path.count_6 { stroke: #fdbf6f; }
+path.count_7 { stroke: #ff7f00; }
+path.count_8 { stroke: #cab2d6; }
+path.count_9 { stroke: #6a3d9a; }
+path.count_10 { stroke: #ffff99; }
+table {
+}
+tbody#matrix { 
+}
+
+.overlay {
+	position: fixed;
+	width: 100%;
+	height: 100%;
+	background-color: red;
+	top: 0;
+	left: 0;
+}
+.overlay > div {
+	position: absolute;
+	top: 25%;
+	left: 25%;
+	width: 50%;
+	height: 50%;
+	background-color: white;
+}
+h2 > a {
+	text-decoration: underline;
+	position: absolute;
+	right: 20px;
+}
+input, select {
+	border: 1px solid black;
+}
+table.group {
+	border: 1px solid black;
+	margin-left: 10px;
+}
