@@ -105,3 +105,38 @@ table.group {
 	border: 1px solid black;
 	margin-left: 10px;
 }
+.uno {
+	fill: yellow;
+}
+.dos { 
+	fill: red;
+}
+.tres { 
+	fill: green;
+}
+.cuatro { 
+	fill: purple;
+}
+#vizcnt .viz {
+	height: 500px;
+	width: 500px;
+}
+.hidelabel text { 
+	visibility: hidden;
+}
+.hidelabel:hover text {
+	visibility: visible;
+}
+.hidelabel path {
+	stroke: none;
+}
+text {
+	font-size: 0.5em;
+}
+text.brighter { 
+	stroke: white;
+}
+text.darker { 
+	stroke: black;
+}
+
