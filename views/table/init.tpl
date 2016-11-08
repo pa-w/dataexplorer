@@ -7,18 +7,20 @@
 <a id="get_functions" data-download="/table/info/functions.csv" data-download_id="functions" data-download_parse="#refresh_functions" data-onload/>
 <a id="refresh_functions" data-catalog="functions" data-create_element="option" data-element_container=".functions" data-element_attr='{literal}{{/literal}"value": "key"{literal}}{/literal}' data-element_html="key"/>
 <a id="refresh_operators" data-catalog="operators" data-create_element="option" data-element_container=".operators" data-element_attr='{literal}{{/literal}"value": "key"{literal}}{/literal}' data-element_html="value"></a>
-<a id="refresh_data_types" data-catalog="data_types" data-create_element="option" data-element_container=".data_types" data-element_attr='{literal}{{/literal}"value": "value"{literal}}{/literal}' data-element_html="value"/>
+<a id="refresh_data_types" data-catalog="data_types" data-create_element="option" data-element_container=".data_types" data-element_attr='{literal}{{/literal}"value": "value"{literal}}{/literal}' data-element_html="value"></a>
+<a id="quantify_sunburst" data-control_chart="sunburst" data-quantify="matrix" data-quantifier="aggregates" data-debug="will quantify sunburst"></a>
+<form id="matrix_form">
 <div class="row">
-	<form id="matrix_form">
 	<div class="col two">
 		<div class="row">
 			<h2>Columns</h2>
-			<a id="update_groups" data-debug="Update groups" data-download_method="post" data-download="/table/matrix/{$table}.csv" data-download_id="matrix" data-query_string_form="matrix_form" data-download_parse="#create_hierarchy,#clear_matrix,#update_matrix,#chart_matrix,#chart_treemap"></a>
+			<a id="update_groups" data-debug="Update groups" data-download_method="post" data-download="/table/matrix/{$table}.csv" data-download_id="matrix" data-query_string_form="matrix_form" data-download_parse="#create_hierarchy,#clear_matrix,#update_matrix,#chart_matrix,#analyze_groups"></a>
+			<a id="analyze_groups" data-download_method="get" data-download="/table/analyze/{$table}.json" data-type="json" data-download_id="analyze" data-query_string_form="matrix_form" data-download_parse="#create_sunbursts"></a>
+			<a id="create_sunbursts" data-control_element="#vizcnt > *" data-element_remove data-callback="create_sunbursts"></a>
 			<a id="create_hierarchy" data-callback="create_hierarchy"></a>
 			<a id="clear_matrix" data-control_element="#matrix tr" data-element_remove></a>
 			<a id="update_matrix" data-catalog="matrix" data-create_element="tr" data-element_container="#matrix" data-item_element="td"></a>
 			<a id="chart_matrix" data-control_chart="chart" data-quantify="matrix" data-quantifier="matrix"></a>
-			<a id="chart_treemap" data-control_chart="treemap" data-quantify="matrix" data-quantifier="treemap"></a>
 			<a id="update_unique" data-catalog="unique" data-create_element="option" data-element_container=".unique" data-element_html="column_name" data-debug="Will update"></a>
 			<a id="refresh_unique" data-control_element=".unique" data-element_remove_children data-parse="#update_unique"></a>
 			<a id="update_trees" data-parse_sequence=".update_tree,#update_groups"></a>
@@ -61,7 +63,6 @@
 		<input type="hidden" id="filter" name="filter"/>
 		<h2>Filters</h2>
 		<div id="filter_ui">
-
 		<table>
 			<thead id="filter_control">
 				<tr>
@@ -79,9 +80,11 @@
 			<tbody id="filter_main"></tbody>
 		</table>
 		</div>
-		<input type="button" value="Send" data-click="#test"/>
 	</div>
-	</form>
+</div>
+</form>
+<br>
+<div class="row" id="vizcnt">
 </div>
 <div class="row">
 	<div>
