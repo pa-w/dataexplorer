@@ -1,0 +1,3 @@
+views/_compile/
+config/rate_limit/
+*.sw*

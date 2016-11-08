@@ -17,6 +17,8 @@ class table extends Base
 		return $r;
 	}
 	function init ($table) {
+		$this->_listTables ();
+
 		$this->antDefinition = "js/matrix.js";
 		$this->table = $table;
 
@@ -54,7 +56,7 @@ class table extends Base
 
 					$col = $tbl.'."'.$col.'"::' . $dt;
 					if (!empty ($dfn) && array_key_exists ($dfn, $this->Functions)) {
-						$col = str_replace (":val:", $col, $this->Functions);
+						$col = str_replace (":val:", $col, $this->Functions [$dfn]);
 					}
 					if (array_key_exists ("operator", $i ["input"]) && $k > 0) {
 						$sql .= " ". $i ["input"]["operator"]." ";
@@ -73,6 +75,177 @@ class table extends Base
 	/**
 	* @allow_method POST
 	*/
+	function analyze ($table, ...$joins) {
+		if (empty ($_REQUEST)) {	
+			$input = array ();
+			parse_str (urldecode (file_get_contents ("php://input")), $input);
+		} else {
+			$input = $_REQUEST;
+		}
+		$columns = array ();
+		$distinct = false;
+		if (array_key_exists ("groups", $input)) {
+			foreach ($input ["groups"] as $i => $g) {
+				$columns [] = array (
+						"group" => $g, 
+						"aggregate" => $input ["aggregate"][$i], 
+						"input_funct" => $input ["input_funct"][$i],
+						"data_type" => $input ["data_type"][$i],
+						"distinct" => isset ($input ["distinct"][$i]) ? $input ["distinct"][$i] : "",
+						"filter" => isset ($input ["filter_col"][$i]) ? $input ["filter_col"][$i] : ""
+						);
+				if (isset ($input ["distinct"][$i]) && !empty ($input ["aggregate"][$i])) {
+					$distinct = true;
+				}
+			}
+			$columns [] = array ("group" => "*", "aggregate" => "count");
+		}
+		$i = 0;
+		$selGrps = array_map (function ($a) use (&$i) {
+			@list ($tbl, $column) = explode (".", $a ["group"]);
+			@list ($dType,$cmd) = explode (":", $a ["data_type"]);
+
+			$colName = $column;
+
+			if (array_key_exists ($a ["aggregate"], $this->AggregateFunctions)) {
+				if (!empty ($column)) {
+					$colName = $a["aggregate"] . "_" . $column."_". $i;
+				} else {
+					$colName = $a ["aggregate"];
+				}
+			}
+
+			$i++;
+			return array ("column_name" => $colName, "aggregate" => $a ["aggregate"]);  
+		}, $columns);
+
+
+		return $selGrps;
+	}
+	/**
+	* @allow_method POST
+	*/
+	function sets ($table, ...$joins) {
+		if (empty ($_REQUEST)) {	
+			$input = array ();
+			parse_str (urldecode (file_get_contents ("php://input")), $input);
+		} else {
+			$input = $_REQUEST;
+		}
+		$columns = array ();
+		$distinct = false;
+		if (array_key_exists ("groups", $input)) {
+			foreach ($input ["groups"] as $i => $g) {
+				$columns [] = array (
+						"group" => $g, 
+						"aggregate" => $input ["aggregate"][$i], 
+						"input_funct" => $input ["input_funct"][$i],
+						"data_type" => $input ["data_type"][$i],
+						"distinct" => isset ($input ["distinct"][$i]) ? $input ["distinct"][$i] : "",
+						"filter" => isset ($input ["filter_col"][$i]) ? $input ["filter_col"][$i] : ""
+						);
+				if (isset ($input ["distinct"][$i]) && !empty ($input ["aggregate"][$i])) {
+					$distinct = true;
+				}
+			}
+		}
+		$universe = array ();
+		$q = pg_query ("SELECT distinct ogc_fid FROM \"".pg_escape_string ($table)."\"");
+		while ($f = pg_fetch_assoc ($q)) {
+			$universe [] = $f ["ogc_fid"];
+		}
+		$where = $this->_parseFilter (json_decode ($input ["filter"], true));
+		$groups = array_map (function ($a) use ($where, $table, $universe) { 
+			list ($tbl, $column) = explode (".", $a ["group"]);
+			@list ($dType,$cmd) = explode (":", $a ["data_type"]);
+
+			$col = $tbl .".\"".$column."\"::".$dType;
+			if (!empty ($cmd) && array_key_exists ($cmd, $this->Functions)) {
+				$col = str_replace (":val:", $col, $this->Functions [$cmd]);
+			}
+			if (!empty ($a ["input_funct"])) {
+				//TODO Fix security flaw. (analyze function arguments? sanitize them?)
+				$col = str_replace (":val:", $col, $a ["input_funct"]);
+			}
+
+			if (array_key_exists ($a ["aggregate"], $this->AggregateFunctions)) {
+				$col = str_replace (":val:", ($a ["distinct"] == "Y" ? "distinct " : "") . $col, $this->AggregateFunctions [$a ["aggregate"]]);
+				$sql = "SELECT distinct ogc_fid FROM \"".pg_escape_String ($table) ."\""; 
+				if (!empty ($where)) {
+					$sql .= " WHERE (" . $where .")";
+				}
+				$items = array ();
+				$isUniverse = true;
+				$filter = "";
+				if (!empty ($a [ "filter"])) {
+					$fWhere = $this->_parseFilter (json_decode ($a ["filter"], true));
+					$filter = $fWhere;
+					if (!empty ($where) && !empty ($fWhere)) {
+						$sql .= " AND (". $fWhere .")";
+						$isUniverse = false;
+					} elseif (!empty ($fWhere)) {
+						$sql .= " WHERE " .$fWhere;
+						$isUniverse = false;
+					}
+					if (!$isUniverse) { 
+						$sql .= " ORDER BY ogc_fid";
+						$q = pg_query ($sql);
+						while ($f = pg_fetch_assoc ($q)) {
+							$items [] = $f ["ogc_fid"];
+						}
+					}
+				}
+
+				return array (
+					"aggregate" => $col,
+					"universe" => $isUniverse,
+					"filter" => $fWhere,
+					"children" => array (),
+					"items" => ($isUniverse) ? $universe : $items
+				);
+			}
+		}, $columns);
+		$grps = array ();
+		foreach ($groups as $g) {
+			if (!array_key_exists ($g ["aggregate"], $grps)) {
+				$grps [$g ["aggregate"]] = array();
+			}
+
+			$grps [$g ["aggregate"]][] = $g; 
+		}
+		
+		foreach ($grps as $agg => $cols) {
+			foreach ($cols as $colA) {
+				foreach ($cols as $colB) { 
+					if (is_array ($colA) && is_array ($colB) 
+						&& array_key_exists ("items",  $colA) && array_key_exists ("items", $colB)) {
+						if ($colA ["items"] != $colB ["items"]) {
+							$int = array_intersect ($colA ["items"], $colB ["items"]);
+							echo "Intersection: " . count ($int). "<br>";
+							if (!empty ($int)) {
+								if ($int == $colB ["items"]) {
+									$colA ["children"] [] = $colB;
+								}
+								if ($int == $colA ["items"]) {
+									echo "Col A is a subset of Col B<br>";
+									echo "Col B Universe: " .$colB ["universe"]."<br>";
+									$colB ["children"] [] = $colA;
+									unset ($colA [ "items" ]);
+								}
+							}
+						}
+					}
+				}
+			}
+
+			//echo "<pre>".print_r ($cols, true)."</pre>";
+		}
+		echo "<pre>".print_r ($grps, true)."</pre>";
+		
+	}
+	/**
+	* @allow_method POST
+	*/
 	function matrix ($table, ...$joins) {
 		if (empty ($joins)) $joins = array ();
 		$tables = array ($table) + $joins;
@@ -81,19 +254,27 @@ class table extends Base
 		$sql = "SELECT ";
 		$parts = array ();
 		$columns = array ();
+		$distinct = false;
 		if (array_key_exists ("groups", $input)) {
 			foreach ($input ["groups"] as $i => $g) {
 				$columns [] = array (
 						"group" => $g, 
 						"aggregate" => $input ["aggregate"][$i], 
+						"input_funct" => $input ["input_funct"][$i],
 						"data_type" => $input ["data_type"][$i],
 						"distinct" => isset ($input ["distinct"][$i]) ? $input ["distinct"][$i] : "",
 						"filter" => isset ($input ["filter_col"][$i]) ? $input ["filter_col"][$i] : ""
 						);
-
+				if (isset ($input ["distinct"][$i]) && !empty ($input ["aggregate"][$i])) {
+					$distinct = true;
+				}
 			}
 		}
-		$selGrps = array_map (function ($a) {
+		if ($distinct) { 
+			$sql .= " distinct ";
+		}
+		$i = 0;
+		$selGrps = array_map (function ($a) use (&$i) {
 			list ($tbl, $column) = explode (".", $a ["group"]);
 			@list ($dType,$cmd) = explode (":", $a ["data_type"]);
 
@@ -101,17 +282,24 @@ class table extends Base
 			if (!empty ($cmd) && array_key_exists ($cmd, $this->Functions)) {
 				$col = str_replace (":val:", $col, $this->Functions [$cmd]);
 			}
+			if (!empty ($a ["input_funct"])) {
+				//TODO Fix security flaw. (analyze function arguments? sanitize them?)
+				$col = str_replace (":val:", $col, $a ["input_funct"]);
+			}
 
 			if (array_key_exists ($a ["aggregate"], $this->AggregateFunctions)) {
 				$col = str_replace (":val:", ($a ["distinct"] == "Y" ? "distinct " : "") . $col, $this->AggregateFunctions [$a ["aggregate"]]);
 
 				if (!empty ($a [ "filter"])) {
 					$fWhere = $this->_parseFilter (json_decode ($a ["filter"], true));
-					$col .= " filter (WHERE " . $fWhere . ")";
+					if (!empty ($fWhere)) {
+						$col .= " filter (WHERE " . $fWhere . ")";
+					}
 				}
 
-				$col .= " as \"" . $a["aggregate"] . "_" . $column.'"';
+				$col .= " as \"" . $a["aggregate"] . "_" . $column."_". $i .'"';
 			}
+			$i++;
 			return $col;
 		}, $columns);
 		$parts += $selGrps;
@@ -126,7 +314,10 @@ class table extends Base
 				if (!empty ($cmd) && array_key_exists ($cmd, $this->Functions)) {
 					$col = str_replace (":val:", $col, $this->Functions [$cmd]);
 				}
-
+				if (!empty ($a ["input_funct"])) {
+					//TODO Fix security flaw. (analyze function arguments? sanitize them?)
+					$col = str_replace (":val:", $col, $a ["input_funct"]);
+				}
 
 				return $col;
 			}
@@ -183,14 +374,15 @@ class table extends Base
 	}
 	function import () {
 	}
+	var $message;
 	/**
 	* @allow_method POST
 	* @request_required_param url
 	* @request_required_param alias
 	*/
 	function import_save () { 
-		if (empty ($_REQUEST ["url"])) { return array ("message" => "URL should not be empty"); }
-		if (empty ($_REQUEST ["alias"])) { return array ("message" => "Alias should not be empty"); }
+		if (empty ($_REQUEST ["url"])) { $this->message = "URL should not be empty"; return; }
+		if (empty ($_REQUEST ["alias"])) { $this->message = "Alias should not be empty"; return; }
 
 		$pUrl = parse_url ($_REQUEST ["url"]);
 		$pInfo = pathinfo ($pUrl ["path"]); 
@@ -206,7 +398,8 @@ class table extends Base
 			list ($t, $e) = explode ("/", $v);
 			if (!empty ($e)) { @list ($contentType) = explode (";", $e); }
 		}
-		$allowedTypes = array ("csv", "json", "html", "octet-stream");
+		$allowedTypes = array ("csv", "json", "html", "octet-stream", "shp");
+		$output = null;
 		if (in_array ($contentType, $allowedTypes)) {
 			if ($contentType == "octet-stream") $contentType = "csv";
 			$fName = "/tmp/".$_REQUEST ["alias"]. ".".$contentType;
@@ -217,7 +410,7 @@ class table extends Base
 			fclose ($f);
 			$rName = $_REQUEST ["alias"];
 			$dSQL = "/tmp/{$_REQUEST ["alias"]}.sql";
-			$p = popen ('/usr/local/bin/ogr2ogr -f "PGDump" -nln '.$rName.' '.$dSQL.' '.$fName.' 2>&1', 'r');
+			$p = popen ('/usr/local/bin/ogr2ogr -f "PGDump" -nln "'.$rName.'" "'.$dSQL.'" "'.$fName.'" 2>&1', 'r');
 			$output .= stream_get_contents ($p);
 			fclose ($p);
 			if (file_exists ($dSQL)) {
@@ -225,12 +418,13 @@ class table extends Base
 				$output .= stream_get_contents ($p);
 				fclose ($p);
 
-				return array ("message" => nl2br ($output));
+				$this->message = nl2br ($output);
+				return; 
 			}
 		} else {
-			return array ("message" => "Content type ($contentType) not supported");
+			$this->message = "Content type ($contentType) not supported";
+			return;
 		}
-		return array ("message" => "...");
 	}
 	function info ($type) { 
 		$types = array ("data_types" => $this->DataTypes, "aggregate_functions" => $this->AggregateFunctions, "operators" => $this->Operators, "functions" => $this->Functions);

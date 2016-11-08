@@ -12,6 +12,8 @@ class Base {
 
 	public function __construct () {
 		$this->_connection = pg_connect ("dbname=sandbox user=paw");
+	}
+	function _listTables () { 
 		$r = pg_select ($this->_connection, "information_schema.tables", array ("table_schema" => "public"));	
 		foreach ($r as $t) {
 			$this->_tables [] = $t ["table_name"];
