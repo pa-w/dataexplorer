@@ -1,7 +1,21 @@
 var conf = {
 	prequantifiers: {
-		treemap: function () {
-			console.log (arguments);
+		aggregates: function (colName) {
+			var h = this.data.nested_matrix.asHierarchy (
+				function (d) {
+					if (d.values) {
+						return 0;
+					}
+					var x =  parseInt (d.value [colName].replace(/[^0-9]/g, ''));
+					return x;
+				},
+				null
+			)
+			return {
+				"data": h,
+				"scale": d3.scaleOrdinal(d3.schemeCategory20c),
+				"colors": {}
+			}
 			//return new Nestfiy (this.data.matrix 
 		},
 		matrix: function () {
@@ -25,7 +39,55 @@ var conf = {
 	quantifiers: {
 		treemap: {
 			treemap: function () {
-				console.log (arguments);
+			}
+		},
+		sunburst: {
+			aggregates: function (d, l, e, siblings) { 
+				var n = siblings.length;
+				var elm = siblings [e]
+				var k = d.ancestors ().map (function (a) { if (a.data.key!==undefined) { return a.data.key; } }), 
+					pkey = k.slice (1).join ("."), 
+					key = k.join (".");
+				var color = "white", stroke = "black";
+				if (k.length > 1) {
+					stroke = "white";
+					if (!pkey) { 
+						color = d3.hcl (l.scale (key)).toString ();
+					} else {
+						if (d.children) {
+							var darkerScale = d3.scaleLinear ().domain ([0, d.parent.children.length]),
+								darker = darkerScale (d.parent.children.indexOf (d));
+
+							color = d3.hcl (l.colors [pkey])
+								.darker (darker)
+								.toString ();
+						} else {
+							var leafScale = d3.scaleLinear ()
+								.domain (d3.extent (d.parent.children, function (a) { return a.value; }))
+								.range ([d3.hcl (l.colors [pkey]).brighter (.1), d3.hcl (l.colors [pkey]).brighter (1)])
+								.interpolate (d3.interpolateHcl);
+							color = leafScale (d.value).toString ();
+						}
+					}
+				}
+				l.colors [key] = color;
+				if (d.parent) { 
+					var data = {
+						"parse": []
+					};
+					if (d.data.value) { 
+						for (var x in d.data.value) {
+							data.parse.push ({
+								"control_element": ".label_" + x,
+								"element_text": d.data.value [x],
+							});
+						}
+					} else if (d.data.values) {
+						//TODO: legends for the internal nodes nodes.
+						console.log (d);
+					}
+				}
+				return { "fill": color, "stroke": stroke, "stroke-width": "0.5px", "label": d.data.key, "data": data };
 			}
 		},
 		lines: {
@@ -37,46 +99,55 @@ var conf = {
 		}
 	},
 	callbacks: {
+		create_legends: function (cols) {
+			var sel = d3.select ("#legend_table")
+				.selectAll ("tr").remove (),
+			add = function (d, i, trs) {
+				d3.select (trs [i]).append ("th").text (d.column_name);
+				d3.select (trs [i]).append ("td").classed ("label_" + d.column_name, true);
+			}
+
+			d3.select ("#legend_table")
+				.selectAll ("tr")
+				.data (cols)
+				.enter ().append ("tr")
+					.each (add)
+			
+
+		},
+		create_sunbursts: function () {
+			var nests = [], aggregates = [], pts = [];
+			for (var c in this.data.analyze) {
+				if (this.data.analyze [c].aggregate != "") { 
+					aggregates.push (this.data.analyze [c].column_name);
+				} else {
+					nests.push (this.data.analyze [c].column_name);
+				}
+				pts.push (this.data.analyze [c].column_name);
+			}
+			this.conf.callbacks.create_legends (this.data.analyze);
+			this.data.nested_matrix = new Nestify (this.data.matrix, nests, pts);
+			
+			var vizcnt = d3.select ("#vizcnt");	
+			for (var x in aggregates) {
+				var chartCont = vizcnt.append ("div");
+				chartCont.append ("h3").text (aggregates [x]);
+				var chart = chartCont.append ("div")
+					.classed ("viz col two", true)
+					.attr ("id", "chart_" + aggregates[x])
+					.attr ("data-chart", "sunburst")
+					.attr ("data-quantify", "nested_matrix")
+					.attr ("data-quantifier", "aggregates")
+					.attr ("data-quantifier_args", aggregates [x])
+
+				this.initChart (chart.node ());
+			}
+		},
 		create_hierarchy: function () {
-			console.log ("will create hierarchy");
 			//this.data.hierarchy = new Nestify (this.data.matrix);
 		},
 		display_subfunctions (i) {
-			console.log ("display _ subfunctions" + i);
 		},
-		/*
-		add_filter: function () {
-			var valSelect = document.getElementById ("filter_value"), val = valSelect.options[valSelect.selectedIndex].value
-				opSelect = document.getElementById ("filter_operator"), op = opSelect.options[opSelect.selectedIndex].value,
-				dtSelect = document.getElementById ("filter_data_type"), dt = dtSelect.options[dtSelect.selectedIndex].value,
-				func = document.getElementById ("filter_function").value, colSelect = document.getElementById ("filter_col"),
-				col = colSelect.options [colSelect.selectedIndex].value;
-				if (col && dt && op && val) {
-					var filtersCount =d3.select ("#filters").node ().children.length;
-
-					var tr = d3.select ("#filters").append ("tr");
-					var colDt = col + "::" + dt
-					var colDesc = func != "" ? func.replace (":val:", colDt) : colDt;
-					tr.append ("td")
-						.append ("input")
-						.attrs ({
-							"id": "filter_" + filtersCount ,
-							"type": "hidden", 
-							"value": colDesc + "|"+op+"|"+val
-						})
-					var sx = tr.append ("td")
-						.append ("select")
-						.attrs ({
-							"id": "operator_" + filtersCount
-						});
-					sx.append ("option").attr("value", "AND").html ("AND");
-					sx.append ("option").attr("value", "OR").html ("OR");
-					tr.append ("td").html (colDesc);
-					tr.append ("td").html (op);
-					tr.append ("td").html (val);
-				}
-		},
-		*/
 		set_data_type: function (arg) {
 			var elm = $(arg.element)[0];
 			if (elm) {
@@ -111,7 +182,7 @@ var conf = {
 						.attrs ({
 							"name": "aggregate[" + optsSize + "]"
 						});
-				agg.append ("option").html ("- none -");
+				agg.append ("option");
 				for (var x in this.data.aggregate_functions) {
 					agg.append ("option")
 						.attr ("value", this.data.aggregate_functions [x].key)
@@ -126,7 +197,11 @@ var conf = {
 						"value": "Y"
 					});
 
-				var name = tr.append ("td").html (colName);
+				var name = tr.append ("td");
+				name.append ("b").html (colName + "<br/>")
+				name.append ("input").attrs ({
+					"name": "input_funct[" + optsSize + "]"
+				});
 				var dType = tr.append ("td")
 						.append ("select")
 						.attrs ({
@@ -167,9 +242,6 @@ var conf = {
 		update_tree: function (optsSize) {
 			var fMain = "filter_main" + (optsSize !== undefined ? "_" + optsSize : "");
 			var x = document.getElementById (fMain);
-			console.log (optsSize + " : " + x);
-
-			console.log (fMain);
 			var getInputs = function (node) {
 				var xd = node.querySelectorAll ("input,select"), r = {};
 				for (var e in xd) {
@@ -209,8 +281,6 @@ var conf = {
 				}
 				return false;
 			}, function (t) { 
-				console.log (t);
-				console.log (JSON.stringify (t));
 				document.getElementById ("filter" + (optsSize !== undefined ? "_" + optsSize : "")).value = JSON.stringify (t); 
 			});
 
